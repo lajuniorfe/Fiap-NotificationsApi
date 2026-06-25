@@ -1,22 +1,30 @@
 ﻿using NotificationsApi.Contracts;
-using NotificationsApi.Services;
+using NotificationsApi.Messagens;
 
 namespace NotificationsApi.Consumers
 {
-    public class UserCreatedConsumer : IUserCreatedConsumer
+    public class UserCreatedConsumer : BackgroundService
     {
-        private readonly INotificationService _notificationService;
+        private readonly IRabbitMqConsumerService _messageBus;
 
-        public UserCreatedConsumer(INotificationService notificationService)
+
+        public UserCreatedConsumer(IRabbitMqConsumerService messageBus)
         {
-            _notificationService = notificationService;
+            _messageBus = messageBus;
+
         }
+
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            await _messageBus.SubscribeAsync<UserCreatedEvent>("user-created", ConsumeAsync);
+        }
+
 
         public async Task ConsumeAsync(UserCreatedEvent message)
         {
             Console.WriteLine($"[EMAIL] Bem-vindo {message.Email}");
 
-            await _notificationService.SendWelcomeEmailAsync(message.Email, message.Name);
+            await Task.CompletedTask;
         }
     }
 }
