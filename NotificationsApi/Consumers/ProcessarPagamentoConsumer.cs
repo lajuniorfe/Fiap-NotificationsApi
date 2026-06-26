@@ -12,7 +12,6 @@ namespace NotificationsApi.Consumers
         public ProcessarPagamentoConsumer(IRabbitMqConsumerService messageBus)
         {
             _messageBus = messageBus;
-
         }
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -24,9 +23,16 @@ namespace NotificationsApi.Consumers
 
         public async Task ConsumeAsync(PaymentProcessedEvent message)
         {
-            Console.WriteLine($"[EMAIL] Compra {message.Status} para usuário {message.UserId}");
+          
+            if(message.Status == "Aprovado")
+            {
+                Console.WriteLine($"[EMAIL] Compra aprovada com sucesso!");
+            }
+            else
+            {
+                Console.WriteLine($"[EMAIL] Compra não aprovada!");
 
-            await Task.CompletedTask;
+            }
         }
     }
 }
