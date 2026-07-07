@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: notifications-api
+  labels:
+    app: notifications-api
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: notifications-api
+
+  template:
+    metadata:
+      labels:
+        app: notifications-api
+
+    spec:
+      containers:
+      - name: notifications-api
+        image: seuusuario/notifications-api:latest
+        imagePullPolicy: IfNotPresent
+
+        ports:
+        - containerPort: 8080
+
+        env:
+        - name: ASPNETCORE_ENVIRONMENT
+          value: Development
+
+        - name: RabbitMQ__Host
+          value: rabbitmq
