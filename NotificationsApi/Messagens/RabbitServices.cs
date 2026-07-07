@@ -7,27 +7,58 @@ namespace NotificationsApi.Messagens
 {
     public class RabbitServices : IRabbitMqConsumerService
     {
-        private readonly IConnection _connection;
+        private readonly IConfiguration _configuration;
+
+        private IConnection? _connection;
         private IChannel? _channel;
 
         public RabbitServices(IConfiguration configuration)
         {
-            var factory = new ConnectionFactory
-            {
-                HostName = configuration["RabbitMQ:Host"],
-                UserName = configuration["RabbitMQ:Username"],
-                Password = configuration["RabbitMQ:Password"]
-            };
+            _configuration = configuration;
+        }
 
-            _connection = factory.CreateConnectionAsync().Result;
-        
+        public async Task EnsureConnectionAsync()
+        {
+            if (_connection != null && _connection.IsOpen)
+                return;
+
+
+            while (_connection == null || !_connection.IsOpen)
+            {
+                try
+                {
+                    var factory = new ConnectionFactory
+                    {
+                        HostName = _configuration["RabbitMQ:Host"],
+                        UserName = _configuration["RabbitMQ:Username"],
+                        Password = _configuration["RabbitMQ:Password"]
+                    };
+
+
+                    _connection = await factory.CreateConnectionAsync();
+
+                    _channel = await _connection.CreateChannelAsync();
+
+
+                    Console.WriteLine("RabbitMQ conectado.");
+
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(
+                        $"Falha ao conectar no RabbitMQ: {ex.Message}");
+
+                    await Task.Delay(
+                        TimeSpan.FromSeconds(5));
+                }
+            }
         }
 
         public async Task PublishAsync<T>(string queueName, T message)
         {
-            var channel = await _connection.CreateChannelAsync();
+            await EnsureConnectionAsync();
 
-            await channel.QueueDeclareAsync(
+            await _channel!.QueueDeclareAsync(
                 queue: queueName,
                 durable: true,
                 exclusive: false,
@@ -36,51 +67,48 @@ namespace NotificationsApi.Messagens
             var body = Encoding.UTF8.GetBytes(
                 JsonSerializer.Serialize(message));
 
-            await channel.BasicPublishAsync(
+            await _channel!.BasicPublishAsync(
                 exchange: "",
                 routingKey: queueName,
                 body: body);
+
+            await Task.CompletedTask;
         }
 
 
         public async Task SubscribeAsync<T>(string queueName, Func<T, Task> handler)
         {
-            var channel = await _connection.CreateChannelAsync();
+            await EnsureConnectionAsync();
 
-            await channel.QueueDeclareAsync(
+            await _channel!.QueueDeclareAsync(
                 queue: queueName,
                 durable: true,
                 exclusive: false,
                 autoDelete: false);
 
-            var consumer = new AsyncEventingBasicConsumer(channel);
+            var consumer = new AsyncEventingBasicConsumer(_channel);
 
             consumer.ReceivedAsync += async (_, args) =>
             {
-                try
+
+                var json = Encoding.UTF8.GetString(args.Body.ToArray());
+
+                var message = JsonSerializer.Deserialize<T>(json);
+
+                if (message != null)
                 {
-                    var json = Encoding.UTF8.GetString(args.Body.ToArray());
-
-                    var message = JsonSerializer.Deserialize<T>(json);
-
-                    if (message != null)
-                    {
-                        await handler(message);
-                    }
-
-                    await channel.BasicAckAsync(args.DeliveryTag, multiple: false);
+                    await handler(message);
                 }
-                catch
-                {
-                    // em caso de erro, rejeita e reencaminha
-                    await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: true);
-                }
+
             };
 
-            await channel.BasicConsumeAsync(
+            await _channel!.BasicConsumeAsync(
                 queue: queueName,
                 autoAck: false,
                 consumer: consumer);
+
+            await Task.CompletedTask;
+
         }
     }
 }
