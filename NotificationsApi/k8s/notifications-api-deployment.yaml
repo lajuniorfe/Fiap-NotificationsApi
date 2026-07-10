@@ -20,16 +20,12 @@ spec:
 
     spec:
       containers:
-      - name: notifications-api
-        image: seuusuario/notifications-api:latest
-        imagePullPolicy: IfNotPresent
+        - name: notifications-api
+          image: lajunior/notifications-api:latest
+          imagePullPolicy: IfNotPresent
 
-        ports:
-        - containerPort: 8080
-
-        env:
-        - name: ASPNETCORE_ENVIRONMENT
-          value: Development
-
-        - name: RabbitMQ__Host
-          value: rabbitmq
+          envFrom:
+            - configMapRef:
+                name: notifications-config
+            - secretRef:
+                name: notifications-secret
